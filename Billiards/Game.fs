@@ -24,9 +24,11 @@ type Body =
     | Ball of Ball
     | HorizontalWall
     | VerticalWall
+    | Wall
 
 type Game =
     { state: GameState
+      walls: (Vector2 * Vector2) list
       balls: Ball list
       pockets: Pocket list }
 
@@ -44,8 +46,8 @@ module Constants =
     let ballRadius = 0.05715f / 2.f
     /// In grams (from 6oz)
     let ballMass = 170.097f
-    /// Represents μ in   Ff = μFn
-    let ballSurfaceFriction = 0.013f
+    /// Represents a continuous friction coefficient. I guessed at a value for this.
+    let ballSurfaceFriction = 1.f
     let minVelocity = 0.01f
     /// In meters
     let pocketWidth = 35.f / scale
@@ -79,24 +81,31 @@ module Ball =
         && ball.position.X - Constants.ballRadius > pocket.position.X - (Constants.pocketWidth / 2.f)
         && ball.position.X + Constants.ballRadius < pocket.position.X + (Constants.pocketWidth / 2.f)
     
-    let predictCollisions (timeDelta: float32) pockets (balls: (Ball * Vector2) list) =
+    let predictCollisions (timeDelta: float32) pockets walls (balls: (Ball * Vector2) list) =
         [for (ball1, p1_) in balls do
-            // ball/wall collisions -- ignore when the ball is in a pocket's zone
-            if not (List.exists (touchingPocket ball1) pockets) then
-                for (timeDelta', normal, wallId) in
-                    [if p1_.Y < Constants.ballRadius && ball1.velocity.Y < 0.f then
-                        yield (0.f + Constants.ballRadius - ball1.position.Y) / ball1.velocity.Y, 1 @@ 0, HorizontalWall
-                     if p1_.Y > Constants.surfaceWidth - Constants.ballRadius && ball1.velocity.Y > 0.f then
-                        yield (Constants.surfaceWidth - Constants.ballRadius - ball1.position.Y) / ball1.velocity.Y, 1 @@ 0, HorizontalWall
-                     if p1_.X < Constants.ballRadius && ball1.velocity.X < 0.f then
-                        yield (0.f + Constants.ballRadius - ball1.position.X) / ball1.velocity.X, 0 @@ 1, VerticalWall
-                     if p1_.X > Constants.surfaceLength - Constants.ballRadius && ball1.velocity.X > 0.f then
-                        yield (Constants.surfaceLength - Constants.ballRadius - ball1.position.X) / ball1.velocity.X, 0 @@ 1, VerticalWall]
-                    do yield { body1 = Ball(ball1); body2 = wallId
-                               penetration = p1_ - (ball1.position + (ball1.velocity * timeDelta'))
-                               normal = normal }
-            else
-                printfn "pocketed"
+            for (timeDelta', normal, wallId) in
+                [if p1_.Y < Constants.ballRadius && ball1.velocity.Y < 0.f then
+                    yield (0.f + Constants.ballRadius - ball1.position.Y) / ball1.velocity.Y, 1 @@ 0, HorizontalWall
+                 if p1_.Y > Constants.surfaceWidth - Constants.ballRadius && ball1.velocity.Y > 0.f then
+                    yield (Constants.surfaceWidth - Constants.ballRadius - ball1.position.Y) / ball1.velocity.Y, 1 @@ 0, HorizontalWall
+                 if p1_.X < Constants.ballRadius && ball1.velocity.X < 0.f then
+                    yield (0.f + Constants.ballRadius - ball1.position.X) / ball1.velocity.X, 0 @@ 1, VerticalWall
+                 if p1_.X > Constants.surfaceLength - Constants.ballRadius && ball1.velocity.X > 0.f then
+                    yield (Constants.surfaceLength - Constants.ballRadius - ball1.position.X) / ball1.velocity.X, 0 @@ 1, VerticalWall]
+                do yield { body1 = Ball(ball1); body2 = wallId
+                           penetration = p1_ - (ball1.position + (ball1.velocity * timeDelta'))
+                           normal = normal }
+            
+            for (v1, v2) in walls do
+                let near = projectToLineSegment (v1, v2, p1_)
+                let penetrationDepth = Constants.ballRadius - ((p1_ - near).Length ())
+                if penetrationDepth > 0.f then
+                    // the normal is really easy here -- just rotate by 90°
+                    let normal = normalize (p1_ - near) //normalize -((v1.Y - v2.Y) @@ (v2.X - v1.X))
+                    let v1ToV2 = v1 - v2
+                    yield { body1 = Ball(ball1); body2 = Wall
+                            penetration = -(normal * penetrationDepth)
+                            normal = normal }
             
             // ball/ball collisions
             for (ball2, p2_) in balls do
@@ -110,17 +119,18 @@ module Ball =
                             penetration = penetration
                             normal = p1_MinusP2_Normal } ]
     
-    let updateAll (timeDelta: float32) pockets balls =
+    let updateAll (timeDelta: float32) pockets walls balls =
         // 1) calculate future positions based purely on velocity
         // 2) use this to detect collisions and generate information (e.g. between which bodies, penetration depth, normal)
         // 3) use these manifolds to get a net displacement and make the velocities react accordingly
         let balls = balls |> List.map (fun ball -> ball, ball.position + (ball.velocity * timeDelta))
-        let collisions = predictCollisions timeDelta pockets balls
+        let collisions = predictCollisions timeDelta pockets walls balls
         // there's lots of room for optimization, but I don't really expect performance to be a problem here
         balls |> List.map (fun (ball1, p1_) ->
             let ball1Collisions = List.filter (fun manifold -> match manifold.body1 with | Ball(ball1') -> ball1.id = ball1'.id | _ -> false) collisions
+            //let ball1Collisions = ball1Collisions |> List.filter (fun manifold -> if manifold.body2 = Wall then printfn "%A" manifold.penetration; false else true)
             let netDisplacement =
-                -(ball1Collisions |> List.sumBy (fun manifold -> if manifold.body2 = HorizontalWall || manifold.body2 = VerticalWall then manifold.penetration else manifold.penetration / 2.f))
+                -(ball1Collisions |> List.sumBy (fun manifold -> if manifold.body2 = HorizontalWall || manifold.body2 = VerticalWall || manifold.body2 = Wall then manifold.penetration else manifold.penetration / 2.f))
             // just pretend there's only one collision normal for now
             let v1' =
                 match ball1Collisions with
@@ -129,16 +139,20 @@ module Ball =
                     match manifold.body2 with
                     | HorizontalWall -> ball1.velocity * (1 @@ -1)
                     | VerticalWall -> ball1.velocity * (-1 @@ 1)
+                    | Wall ->
+                        // Invert normal velocity (since wall doesn't move)
+                        let vn = Vector2.Dot (ball1.velocity, manifold.normal) * manifold.normal
+                        let vt = ball1.velocity - vn
+                        vt - vn
                     | Ball(ball2) ->
-                        // normal and tangential velocities
+                        // Swap normal velocities
                         let vn1 = Vector2.Dot (ball1.velocity, manifold.normal) * manifold.normal
                         let vn2 = Vector2.Dot (ball2.velocity, manifold.normal) * manifold.normal
                         let vt1 = ball1.velocity - vn1
-                        // Swap normal velocities
                         vn2 + vt1
             
             { ball1 with
-                velocity = v1' * (1.f - Constants.ballSurfaceFriction)
+                velocity = v1' * float32 (Math.Exp (float (-Constants.ballSurfaceFriction * timeDelta)))
                 position = p1_ + netDisplacement })
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -153,6 +167,7 @@ module Game =
         let ballsOrigin = 0.7f * Constants.surfaceLength @@ 0.5f * Constants.surfaceWidth
         let ballsPositionScale = sin (1.f / 3.f * pi) @@ cos (1.f / 3.f * pi)
         { state = Aiming(0.f)
+          walls = [0 @@ 0, 1 @@ 1]
           balls =
             { position = (0.5f * Constants.surfaceLength) @@ (0.5f * Constants.surfaceWidth); velocity = 0 @@ 0; id = BallCue }
             :: List.map (fun (position, id) ->
@@ -180,7 +195,7 @@ module Game =
                 if keyboard.IsKeyDown Keys.Space || mouse.LeftButton = ButtonState.Pressed then
                     let balls =
                         [for ball in game.balls ->
-                            if ball.id = BallCue then { ball with velocity = (cos direction' @@ sin direction') * 3.f}
+                            if ball.id = BallCue then { ball with velocity = (cos direction' @@ sin direction') * 4.f}
                             else ball]
                     Settling, balls
                 else Aiming(direction'), game.balls
@@ -190,4 +205,4 @@ module Game =
                 else Settling, game.balls
         { game with
             state = state
-            balls = Ball.updateAll timeDelta game.pockets balls }
+            balls = Ball.updateAll timeDelta game.pockets game.walls balls }

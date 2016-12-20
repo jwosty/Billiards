@@ -61,7 +61,14 @@ type GameWindow() as this =
         
         //let shouldStep = true
         if shouldStep then
-            game <- Game.update (float32 gameTime.ElapsedGameTime.TotalSeconds) keyboard (Mouse.GetState ()) game
+            let nIterations = 8
+            let timeDelta = float32 gameTime.ElapsedGameTime.TotalSeconds
+            for _ in 1..nIterations do
+                game <- Game.update (timeDelta / float32 nIterations) keyboard (Mouse.GetState ()) game
+    
+    member this.DrawLine (v1: Vector2, v2, color) =
+        let v = v2 - v1
+        spriteBatch.Draw (pixelSprite, v1, new Nullable<_>(), color, v.Direction (), 0 @@ 0, v.Length () @@ 1, SpriteEffects.None, 0.f)
     
     member this.DrawBall ball =
         let screenPosition = Constants.world2ScreenCoords (ball.position + (-Constants.ballRadius @@ Constants.ballRadius))
@@ -75,13 +82,17 @@ type GameWindow() as this =
             let tex = textures.[pocket.sprite]
             let fx = (if pocket.hflip then SpriteEffects.FlipHorizontally else SpriteEffects.None) ||| (if pocket.vflip then SpriteEffects.FlipVertically else SpriteEffects.None)
             spriteBatch.Draw (tex, roundv2 (Constants.world2ScreenCoords pocket.position), new Nullable<_>(), Color.White, 0.f, (tex.Width / 2 @@ tex.Height / 2), 1 @@ 1, fx, 0.f)
-            //if pocket.sprite = SidePocketV && pocket.vflip then
-            //    spriteBatch.Draw (pixelSprite, Constants.world2ScreenCoords (pocket.position - (Constants.pocketWidth / 2.f @@ 0)), new Nullable<_>(), Color.White, 0.f, 0 @@ 0, (Constants.pocketWidth * Constants.scale) @@ 1, SpriteEffects.None, 0.f)
         match game.state, List.tryFind (fun ball -> ball.id = BallCue) game.balls with
         | Aiming(direction), Some(cueBall) ->
             spriteBatch.Draw (pixelSprite, Constants.world2ScreenCoords cueBall.position, new Nullable<_>(), Color.Blue, -direction, 0 @@ 0, 50 @@ 1, SpriteEffects.None, 0.f)
         | _ -> ()
         game.balls |> List.iter this.DrawBall
+        game.walls |> List.iter (fun (v1, v2) ->
+            this.DrawLine (Constants.world2ScreenCoords v1, Constants.world2ScreenCoords v2, Color.White)
+            (*game.balls |> List.tryFind (fun ball -> ball.id = BallCue) |> Option.iter (fun ball ->
+                let p = Constants.world2ScreenCoords (projectToLineSegment (v1, v2, ball.position))
+                let tex = textures.[Sprite.Ball(ball.id)]
+                spriteBatch.Draw (tex, p - ((tex.Width @@ tex.Height) / 2.f), Color.White))*) )
         spriteBatch.End ()
     
 module Main =

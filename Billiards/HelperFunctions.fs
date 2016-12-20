@@ -14,3 +14,12 @@ type Vector2 with
     member this.Normalized () =
         let len = this.Length ()
         this.X / len @@ this.Y / len
+
+/// Projects a vector p perpendicularly onto a line segment given by v1 and v2
+let projectToLineSegment (v1: Vector2, v2, p) =
+    let l2 = (v1 - v2).LengthSquared ()
+    if v1 = v2 then v1
+    else
+        // Get distance along the line segment onto which p projects
+        let t = max 0.f (min 1.f (Vector2.Dot (p - v1, v2 - v1) / l2))
+        v1 + t * (v2 - v1)
