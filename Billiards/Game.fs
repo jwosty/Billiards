@@ -22,8 +22,6 @@ type GameState = | Aiming of float32 | Settling
 /// A collision body
 type Body =
     | Ball of Ball
-    | HorizontalWall
-    | VerticalWall
     | Wall
 
 type Game =
@@ -83,19 +81,6 @@ module Ball =
     
     let predictCollisions (timeDelta: float32) pockets walls (balls: (Ball * Vector2) list) =
         [for (ball1, p1_) in balls do
-            for (timeDelta', normal, wallId) in
-                [if p1_.Y < Constants.ballRadius && ball1.velocity.Y < 0.f then
-                    yield (0.f + Constants.ballRadius - ball1.position.Y) / ball1.velocity.Y, 1 @@ 0, HorizontalWall
-                 if p1_.Y > Constants.surfaceWidth - Constants.ballRadius && ball1.velocity.Y > 0.f then
-                    yield (Constants.surfaceWidth - Constants.ballRadius - ball1.position.Y) / ball1.velocity.Y, 1 @@ 0, HorizontalWall
-                 if p1_.X < Constants.ballRadius && ball1.velocity.X < 0.f then
-                    yield (0.f + Constants.ballRadius - ball1.position.X) / ball1.velocity.X, 0 @@ 1, VerticalWall
-                 if p1_.X > Constants.surfaceLength - Constants.ballRadius && ball1.velocity.X > 0.f then
-                    yield (Constants.surfaceLength - Constants.ballRadius - ball1.position.X) / ball1.velocity.X, 0 @@ 1, VerticalWall]
-                do yield { body1 = Ball(ball1); body2 = wallId
-                           penetration = p1_ - (ball1.position + (ball1.velocity * timeDelta'))
-                           normal = normal }
-            
             for (v1, v2) in walls do
                 let near = projectToLineSegment (v1, v2, p1_)
                 let penetrationDepth = Constants.ballRadius - ((p1_ - near).Length ())
@@ -128,17 +113,14 @@ module Ball =
         // there's lots of room for optimization, but I don't really expect performance to be a problem here
         balls |> List.map (fun (ball1, p1_) ->
             let ball1Collisions = List.filter (fun manifold -> match manifold.body1 with | Ball(ball1') -> ball1.id = ball1'.id | _ -> false) collisions
-            //let ball1Collisions = ball1Collisions |> List.filter (fun manifold -> if manifold.body2 = Wall then printfn "%A" manifold.penetration; false else true)
             let netDisplacement =
-                -(ball1Collisions |> List.sumBy (fun manifold -> if manifold.body2 = HorizontalWall || manifold.body2 = VerticalWall || manifold.body2 = Wall then manifold.penetration else manifold.penetration / 2.f))
+                -(ball1Collisions |> List.sumBy (fun manifold -> if manifold.body2 = Wall then manifold.penetration else manifold.penetration / 2.f))
             // just pretend there's only one collision normal for now
             let v1' =
                 match ball1Collisions with
                 | [] -> ball1.velocity
                 | manifold::_ ->
                     match manifold.body2 with
-                    | HorizontalWall -> ball1.velocity * (1 @@ -1)
-                    | VerticalWall -> ball1.velocity * (-1 @@ 1)
                     | Wall ->
                         // Invert normal velocity (since wall doesn't move)
                         let vn = Vector2.Dot (ball1.velocity, manifold.normal) * manifold.normal
@@ -167,7 +149,18 @@ module Game =
         let ballsOrigin = 0.7f * Constants.surfaceLength @@ 0.5f * Constants.surfaceWidth
         let ballsPositionScale = sin (1.f / 3.f * pi) @@ cos (1.f / 3.f * pi)
         { state = Aiming(0.f)
-          walls = [0 @@ 0, 1 @@ 1]
+          walls = // bottom
+                [0 @@ 0, (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ 0
+                 (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ 0, Constants.surfaceLength @@ 0
+                  // right
+                 Constants.surfaceLength @@ 0, Constants.surfaceLength @@ (Constants.surfaceWidth - Constants.pocketWidth) / 2.f
+                 Constants.surfaceLength @@ (Constants.surfaceWidth + Constants.pocketWidth) / 2.f, Constants.surfaceLength @@ Constants.surfaceWidth
+                  // top
+                 Constants.surfaceLength @@ Constants.surfaceWidth, (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth
+                 (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth, 0 @@ Constants.surfaceWidth
+                  // left
+                 0 @@ Constants.surfaceWidth, 0 @@ (Constants.surfaceWidth + Constants.pocketWidth) / 2.f
+                 0 @@ (Constants.surfaceWidth - Constants.pocketWidth) / 2.f, 0 @@ 0]
           balls =
             { position = (0.5f * Constants.surfaceLength) @@ (0.5f * Constants.surfaceWidth); velocity = 0 @@ 0; id = BallCue }
             :: List.map (fun (position, id) ->
@@ -189,7 +182,6 @@ module Game =
             | Aiming(direction) ->
                 let cueBall = game.balls |> List.find (fun balls -> balls.id = BallCue)
                 let directionVector = ((mouse.X @@ mouse.Y) - (Constants.world2ScreenCoords cueBall.position)) * (1 @@ -1)
-                //let direction' = atan2 directionVector.Y directionVector.X
                 let direction' = (normalize directionVector).Direction ()
                 if keyboard.IsKeyDown Keys.Space || mouse.LeftButton = ButtonState.Pressed then
                     let balls =
