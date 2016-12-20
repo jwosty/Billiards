@@ -59,7 +59,7 @@ type GameWindow() as this =
                 false
         let shouldStep = shouldStep || keyboard.IsKeyDown Keys.X
         
-        //let shouldStep = true
+        let shouldStep = true
         if shouldStep then
             let nIterations = 2
             let timeDelta = float32 gameTime.ElapsedGameTime.TotalSeconds

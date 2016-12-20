@@ -87,8 +87,7 @@ module Ball =
                 let near = projectToLineSegment (v1, v2, p1_)
                 let penetrationDepth = Constants.ballRadius - ((p1_ - near).Length ())
                 if penetrationDepth > 0.f then
-                    // the normal is really easy here -- just rotate by 90°
-                    let normal = normalize (p1_ - near) //normalize -((v1.Y - v2.Y) @@ (v2.X - v1.X))
+                    let normal = normalize (p1_ - near)
                     let v1ToV2 = v1 - v2
                     yield { body1 = Ball(ball1); body2 = Wall
                             penetration = -(normal * penetrationDepth)
@@ -162,7 +161,7 @@ module Game =
                   // left
                  0 @@ Constants.surfaceWidth - Constants.triBasePocketWidth, 0 @@ Constants.triBasePocketWidth]
           balls =
-            { position = (0.5f * Constants.surfaceLength) @@ (0.5f * Constants.surfaceWidth); velocity = 0 @@ 0; id = BallCue }
+            { position = (0.25f * Constants.surfaceLength) @@ (0.5f * Constants.surfaceWidth); velocity = 0 @@ 0; id = BallCue }
             :: List.map (fun (position, id) ->
                 { position = ballsOrigin + (position * ballsPositionScale * Constants.ballRadius * 2.f)
                   velocity = 0.f @@ 0.f; id = id } ) balls
