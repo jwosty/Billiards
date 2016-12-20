@@ -10,7 +10,7 @@ type BallId =
 
 type Sprite =
     | Ball of BallId
-    | CornerPocket | SidePocketV | SidePocketH
+    | CornerPocket | SidePocket
     | Table
 
 type Pocket = { position: Vector2; hflip: bool; vflip: bool; sprite: Sprite }
@@ -45,10 +45,12 @@ module Constants =
     /// In grams (from 6oz)
     let ballMass = 170.097f
     /// Represents a continuous friction coefficient. I guessed at a value for this.
-    let ballSurfaceFriction = 1.f
+    let ballSurfaceFriction = 0.8f
     let minVelocity = 0.01f
     /// In meters
     let pocketWidth = 35.f / scale
+    /// The base length of an isceles right triangle with hypotenuse pocketWidth. In meters.
+    let triBasePocketWidth = pocketWidth / sqrt 2.f
     
     let viewMatrix =
         Matrix.CreateScale (1.f, -1.f, 1.f)
@@ -74,7 +76,7 @@ module Ball =
     
     let touchingPocket ball pocket =
         // for now, only handle the top center pocket
-        pocket.sprite = SidePocketV && pocket.vflip
+        pocket.sprite = SidePocket && pocket.vflip
         && ball.position.Y + Constants.ballRadius > pocket.position.Y - 0.01f
         && ball.position.X - Constants.ballRadius > pocket.position.X - (Constants.pocketWidth / 2.f)
         && ball.position.X + Constants.ballRadius < pocket.position.X + (Constants.pocketWidth / 2.f)
@@ -153,27 +155,23 @@ module Game =
                 [0 @@ 0, (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ 0
                  (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ 0, Constants.surfaceLength @@ 0
                   // right
-                 Constants.surfaceLength @@ 0, Constants.surfaceLength @@ (Constants.surfaceWidth - Constants.pocketWidth) / 2.f
-                 Constants.surfaceLength @@ (Constants.surfaceWidth + Constants.pocketWidth) / 2.f, Constants.surfaceLength @@ Constants.surfaceWidth
+                 Constants.surfaceLength @@ 0, Constants.surfaceLength @@ Constants.surfaceWidth
                   // top
                  Constants.surfaceLength @@ Constants.surfaceWidth, (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth
                  (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth, 0 @@ Constants.surfaceWidth
                   // left
-                 0 @@ Constants.surfaceWidth, 0 @@ (Constants.surfaceWidth + Constants.pocketWidth) / 2.f
-                 0 @@ (Constants.surfaceWidth - Constants.pocketWidth) / 2.f, 0 @@ 0]
+                 0 @@ 0, 0 @@ Constants.surfaceWidth]
           balls =
             { position = (0.5f * Constants.surfaceLength) @@ (0.5f * Constants.surfaceWidth); velocity = 0 @@ 0; id = BallCue }
             :: List.map (fun (position, id) ->
                 { position = ballsOrigin + (position * ballsPositionScale * Constants.ballRadius * 2.f)
                   velocity = 0.f @@ 0.f; id = id } ) balls
           pockets = [{ position = 0 @@ 0; hflip = false; vflip = false; sprite = CornerPocket }
-                     { position = 0.5 @@ 0; hflip = false; vflip = false; sprite = SidePocketV }
+                     { position = 0.5 @@ 0; hflip = false; vflip = false; sprite = SidePocket }
                      { position = 1 @@ 0; hflip = true; vflip = false; sprite = CornerPocket }
-                     { position = 1 @@ 0.5; hflip = true; vflip = false; sprite = SidePocketH }
                      { position = 1 @@ 1; hflip = true; vflip = true; sprite = CornerPocket }
-                     { position = 0.5 @@ 1; hflip = false; vflip = true; sprite = SidePocketV }
-                     { position = 0 @@ 1; hflip = false; vflip = true; sprite = CornerPocket }
-                     { position = 0 @@ 0.5; hflip = false; vflip = false; sprite = SidePocketH }]
+                     { position = 0.5 @@ 1; hflip = false; vflip = true; sprite = SidePocket }
+                     { position = 0 @@ 1; hflip = false; vflip = true; sprite = CornerPocket }]
                      |> List.map (fun pocket -> { pocket with position = pocket.position * (Constants.surfaceLength @@ Constants.surfaceWidth) }) }
     
     let update timeDelta (keyboard: KeyboardState) (mouse: MouseState) game =
