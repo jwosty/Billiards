@@ -152,15 +152,15 @@ module Game =
         let ballsPositionScale = sin (1.f / 3.f * pi) @@ cos (1.f / 3.f * pi)
         { state = Aiming(0.f)
           walls = // bottom
-                [0 @@ 0, (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ 0
-                 (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ 0, Constants.surfaceLength @@ 0
+                [Constants.triBasePocketWidth @@ 0, (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ 0
+                 (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ 0, Constants.surfaceLength - Constants.triBasePocketWidth @@ 0
                   // right
-                 Constants.surfaceLength @@ 0, Constants.surfaceLength @@ Constants.surfaceWidth
+                 Constants.surfaceLength @@ Constants.triBasePocketWidth, Constants.surfaceLength @@ Constants.surfaceWidth - Constants.triBasePocketWidth
                   // top
-                 Constants.surfaceLength @@ Constants.surfaceWidth, (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth
-                 (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth, 0 @@ Constants.surfaceWidth
+                 Constants.surfaceLength - Constants.triBasePocketWidth @@ Constants.surfaceWidth, (Constants.surfaceLength + Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth
+                 (Constants.surfaceLength - Constants.pocketWidth) / 2.f @@ Constants.surfaceWidth, Constants.triBasePocketWidth @@ Constants.surfaceWidth
                   // left
-                 0 @@ 0, 0 @@ Constants.surfaceWidth]
+                 0 @@ Constants.surfaceWidth - Constants.triBasePocketWidth, 0 @@ Constants.triBasePocketWidth]
           balls =
             { position = (0.5f * Constants.surfaceLength) @@ (0.5f * Constants.surfaceWidth); velocity = 0 @@ 0; id = BallCue }
             :: List.map (fun (position, id) ->

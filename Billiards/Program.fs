@@ -87,7 +87,7 @@ type GameWindow() as this =
             spriteBatch.Draw (pixelSprite, Constants.world2ScreenCoords cueBall.position, new Nullable<_>(), Color.Blue, -direction, 0 @@ 0, 50 @@ 1, SpriteEffects.None, 0.f)
         | _ -> ()
         game.balls |> List.iter this.DrawBall
-        game.walls |> List.iter (fun (v1, v2) -> this.DrawLine (Constants.world2ScreenCoords v1, Constants.world2ScreenCoords v2, Color.White))
+        //game.walls |> List.iter (fun (v1, v2) -> this.DrawLine (Constants.world2ScreenCoords v1, Constants.world2ScreenCoords v2, Color.White))
         spriteBatch.End ()
     
 module Main =
