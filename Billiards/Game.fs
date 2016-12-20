@@ -189,13 +189,12 @@ module Game =
             | Aiming(direction) ->
                 let cueBall = game.balls |> List.find (fun balls -> balls.id = BallCue)
                 let directionVector = ((mouse.X @@ mouse.Y) - (Constants.world2ScreenCoords cueBall.position)) * (1 @@ -1)
-                // eew... WHY ARE VECTORS MUTABLE??!??!
-                directionVector.Normalize ()
-                let direction' = atan2 directionVector.Y directionVector.X
+                //let direction' = atan2 directionVector.Y directionVector.X
+                let direction' = (normalize directionVector).Direction ()
                 if keyboard.IsKeyDown Keys.Space || mouse.LeftButton = ButtonState.Pressed then
                     let balls =
                         [for ball in game.balls ->
-                            if ball.id = BallCue then { ball with velocity = (cos direction' @@ sin direction') * 4.f}
+                            if ball.id = BallCue then { ball with velocity = directionVector * (4.f / Constants.scale) }
                             else ball]
                     Settling, balls
                 else Aiming(direction'), game.balls

@@ -61,7 +61,7 @@ type GameWindow() as this =
         
         //let shouldStep = true
         if shouldStep then
-            let nIterations = 8
+            let nIterations = 2
             let timeDelta = float32 gameTime.ElapsedGameTime.TotalSeconds
             for _ in 1..nIterations do
                 game <- Game.update (timeDelta / float32 nIterations) keyboard (Mouse.GetState ()) game
